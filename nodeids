@@ -1,4 +1,4 @@
 Signature: 8a477f597d28d172789f06886806bc55
 # This file is a cache directory tag created by pytest.
 # For information about cache directory tags, see:
-#	https://bford.info/cachedir/spec.html
+#Many applications create and manage directories containing cached information about content stored elsewhere, such as cached Web content or thumbnail-size versions of images or movies. For speed and storage efficiency we would often like to avoid backing up, archiving, or otherwise unnecessarily copying such directories around, but it is a pain to identify and individually exclude each such directory during data transfer operations. I propose an extremely simple convention by which applications can reliably "tag" any cache directories they create, for easy identification by backup systems and other data management utilities. Data management utilities can then heed or ignore these tags as the user sees fit.
