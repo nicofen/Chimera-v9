@@ -1,0 +1,96 @@
+# docker-compose.yml
+# Full Project Chimera stack.
+#
+# Services:
+#   chimera   — the mainframe (all agents + API server)
+#   nginx     — reverse proxy with TLS termination
+#   watchtower — optional: auto-pulls new image builds (comment out if not wanted)
+#
+# Usage:
+#   cp .env.example .env          # fill in your secrets
+#   docker compose up -d          # start in background
+#   docker compose logs -f chimera # follow logs
+#   docker compose down           # stop
+
+services:
+
+  # ── Chimera mainframe ───────────────────────────────────────────────────────
+  chimera:
+    image: chimera:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chimera
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - CHIMERA_MODE=${CHIMERA_MODE:-paper}
+      - CHIMERA_API_HOST=0.0.0.0
+      - CHIMERA_API_PORT=8765
+      - CHIMERA_DB_PATH=/app/data/chimera_trades.db
+      - CHIMERA_CACHE_DIR=/app/data/cache
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - chimera_data:/app/data        # SQLite DB + Parquet cache
+      - chimera_logs:/app/logs        # structured log files
+    networks:
+      - chimera_net
+    # Don't expose 8765 directly — all traffic goes through nginx
+    # expose: ["8765"]
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8765/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 25s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ── Nginx reverse proxy ─────────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: chimera_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/chimera.conf:/etc/nginx/conf.d/chimera.conf:ro
+      - ./deploy/nginx/ssl:/etc/nginx/ssl:ro     # TLS certs (see deploy guide)
+      - chimera_logs:/var/log/nginx
+    networks:
+      - chimera_net
+    depends_on:
+      chimera:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Watchtower (optional — auto-update containers) ──────────────────────────
+  # watchtower:
+  #   image: containrrr/watchtower
+  #   container_name: watchtower
+  #   restart: unless-stopped
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   environment:
+  #     - WATCHTOWER_POLL_INTERVAL=3600     # check every hour
+  #     - WATCHTOWER_CLEANUP=true
+  #   networks:
+  #     - chimera_net
+
+volumes:
+  chimera_data:
+    driver: local
+  chimera_logs:
+    driver: local
+
+networks:
+  chimera_net:
+    driver: bridge
